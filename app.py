@@ -11,6 +11,24 @@ ADZUNA_APP_ID = os.getenv("ADZUNA_APP_ID")
 ADZUNA_APP_KEY = os.getenv("ADZUNA_APP_KEY")
 ADZUNA_BASE_URL = "https://api.adzuna.com/v1/api/jobs"
 
+DEFAULT_ROLES = [
+    "financial analyst",
+    "software engineer",
+    "data analyst",
+    "data scientist",
+    "product manager",
+    "marketing manager",
+    "sales manager",
+    "business analyst",
+    "project manager",
+    "operations manager",
+    "supply chain analyst",
+    "accountant",
+    "consultant",
+    "HR manager",
+    "customer success manager"
+]
+
 
 def get_country_code(location: str) -> str:
     location_lower = (location or "").lower()
@@ -44,7 +62,7 @@ def get_country_code(location: str) -> str:
     return "gb"
 
 
-def clean_job(job: dict) -> dict:
+def clean_job(job: dict, search_role: str) -> dict:
     return {
         "title": job.get("title", ""),
         "company": job.get("company", {}).get("display_name", ""),
@@ -58,7 +76,8 @@ def clean_job(job: dict) -> dict:
         "description": (job.get("description") or "")[:1200],
         "url": job.get("redirect_url", ""),
         "created": job.get("created", ""),
-        "source": "Adzuna"
+        "source": "Adzuna",
+        "search_role": search_role
     }
 
 
@@ -70,84 +89,99 @@ def unique_key(job: dict) -> str:
         str(job.get("url", "")).lower().strip()
     ])
 
-@app.route("/jobs", methods=["GET"])
-def jobs_get():
-    role = request.args.get("role", "financial analyst")
-    location = request.args.get("location", "london")
-    results_per_page = int(request.args.get("results_per_page", 50))
-    max_pages = int(request.args.get("max_pages", 5))
 
-    with app.test_request_context(json={
-        "role": role,
-        "location": location,
-        "results_per_page": results_per_page,
-        "max_pages": max_pages
-    }):
-        return search_jobs()
+def fetch_adzuna_jobs(role, location, results_per_page, max_pages):
+    country_code = get_country_code(location)
+    jobs = []
+    raw_count = 0
+    pages_fetched = 0
+
+    for page in range(1, max_pages + 1):
+        params = {
+            "app_id": ADZUNA_APP_ID,
+            "app_key": ADZUNA_APP_KEY,
+            "results_per_page": results_per_page,
+            "where": location,
+            "content-type": "application/json"
+        }
+
+        if role:
+            params["what"] = role
+
+        response = requests.get(
+            f"{ADZUNA_BASE_URL}/{country_code}/search/{page}",
+            params=params,
+            timeout=15
+        )
+
+        response.raise_for_status()
+        data = response.json()
+        results = data.get("results", [])
+
+        pages_fetched += 1
+        raw_count += len(results)
+
+        if not results:
+            break
+
+        for raw_job in results:
+            jobs.append(clean_job(raw_job, role or "all"))
+
+    return jobs, raw_count, pages_fetched
+
+
 @app.route("/search_jobs", methods=["POST"])
 def search_jobs():
     data = request.json or {}
 
-    role = data.get("role", "")
+    role = (data.get("role") or "").strip()
     location = data.get("location", "london")
 
     results_per_page = int(data.get("results_per_page", 50))
-    max_pages = int(data.get("max_pages", 5))
+    max_pages = int(data.get("max_pages", 3))
 
-    # Free-tier safe limits
     results_per_page = max(1, min(results_per_page, 50))
     max_pages = max(1, min(max_pages, 5))
 
-    country_code = get_country_code(location)
+    roles_to_search = [role] if role else DEFAULT_ROLES
 
-    jobs = []
+    all_jobs = []
     seen = set()
-    pages_fetched = 0
+    total_raw_count = 0
+    total_pages_fetched = 0
 
     try:
-        for page in range(1, max_pages + 1):
-            params = {
-                "app_id": ADZUNA_APP_ID,
-                "app_key": ADZUNA_APP_KEY,
-                "results_per_page": results_per_page,
-                "what": role,
-                "where": location,
-                "content-type": "application/json"
-            }
-
-            response = requests.get(
-                f"{ADZUNA_BASE_URL}/{country_code}/search/{page}",
-                params=params,
-                timeout=15
+        for search_role in roles_to_search:
+            jobs, raw_count, pages_fetched = fetch_adzuna_jobs(
+                search_role,
+                location,
+                results_per_page,
+                max_pages
             )
 
-            response.raise_for_status()
-            data = response.json()
-            results = data.get("results", [])
+            total_raw_count += raw_count
+            total_pages_fetched += pages_fetched
 
-            pages_fetched += 1
-
-            if not results:
-                break
-
-            for raw_job in results:
-                job = clean_job(raw_job)
+            for job in jobs:
                 key = unique_key(job)
 
                 if key in seen:
                     continue
 
                 seen.add(key)
-                jobs.append(job)
+                all_jobs.append(job)
 
         return jsonify({
-            "count": len(jobs),
-            "role_used": role,
+            "count": len(all_jobs),
+            "raw_count": total_raw_count,
+            "deduplicated_count": len(all_jobs),
             "location_used": location,
-            "country_code": country_code,
+            "country_code": get_country_code(location),
+            "roles_searched": roles_to_search,
             "results_per_page": results_per_page,
-            "pages_fetched": pages_fetched,
-            "jobs": jobs
+            "max_pages_per_role": max_pages,
+            "total_pages_fetched": total_pages_fetched,
+            "jobs": all_jobs
         })
 
     except requests.exceptions.RequestException as e:
@@ -163,12 +197,37 @@ def search_jobs():
         }), 500
 
 
+@app.route("/jobs", methods=["GET"])
+def jobs_get():
+    role = request.args.get("role", "")
+    location = request.args.get("location", "london")
+    results_per_page = int(request.args.get("results_per_page", 50))
+    max_pages = int(request.args.get("max_pages", 3))
+
+    with app.test_request_context(json={
+        "role": role,
+        "location": location,
+        "results_per_page": results_per_page,
+        "max_pages": max_pages
+    }):
+        return search_jobs()
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({
         "status": "ok",
         "adzuna_app_id_configured": bool(ADZUNA_APP_ID),
         "adzuna_app_key_configured": bool(ADZUNA_APP_KEY)
+    })
+
+
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({
+        "status": "ok",
+        "message": "Job Searcher API is running",
+        "endpoints": ["/health", "/jobs", "/search_jobs"]
     })
 
 
