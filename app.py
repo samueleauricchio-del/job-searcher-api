@@ -11,139 +11,153 @@ ADZUNA_APP_ID = os.getenv("ADZUNA_APP_ID")
 ADZUNA_APP_KEY = os.getenv("ADZUNA_APP_KEY")
 ADZUNA_BASE_URL = "https://api.adzuna.com/v1/api/jobs"
 
+
 def get_country_code(location: str) -> str:
-    location_lower = location.lower()
+    location_lower = (location or "").lower()
+
     mapping = {
-        "uk": "gb", "united kingdom": "gb", "london": "gb",
-        "us": "us", "usa": "us", "united states": "us", "new york": "us",
+        "uk": "gb", "united kingdom": "gb", "england": "gb",
+        "london": "gb", "manchester": "gb", "birmingham": "gb",
+
+        "us": "us", "usa": "us", "united states": "us",
+        "new york": "us", "san francisco": "us",
+
         "italy": "it", "italia": "it", "milan": "it", "milano": "it", "rome": "it",
-        "germany": "de", "deutschland": "de", "berlin": "de",
+
+        "germany": "de", "deutschland": "de", "berlin": "de", "munich": "de",
+
         "france": "fr", "paris": "fr",
+
         "spain": "es", "madrid": "es", "barcelona": "es",
+
         "netherlands": "nl", "amsterdam": "nl",
+
         "australia": "au", "sydney": "au", "melbourne": "au",
+
         "canada": "ca", "toronto": "ca",
     }
+
     for key, code in mapping.items():
         if key in location_lower:
             return code
+
     return "gb"
 
-def format_jobs_as_text(jobs, role, location):
-    lines = []
-    lines.append(f"JOB LISTINGS — Role: {role} | Location: {location}")
-    lines.append("=" * 60)
-    for i, job in enumerate(jobs, 1):
-        lines.append(f"\n#{i} {job['title']} at {job['company']}")
-        lines.append(f"Location: {job['location']}")
-        if job['salary_min'] and job['salary_max']:
-            predicted = " (estimated)" if job.get('salary_is_predicted') else ""
-            lines.append(f"Salary: £{int(job['salary_min']):,} - £{int(job['salary_max']):,}{predicted}")
-        else:
-            lines.append("Salary: Not specified")
-        if job['contract_type']:
-            lines.append(f"Contract: {job['contract_type']}")
-        if job['contract_time']:
-            lines.append(f"Type: {job['contract_time']}")
-        lines.append(f"Description: {job['description']}")
-        lines.append(f"Apply: {job['url']}")
-        lines.append("-" * 40)
-    return "\n".join(lines)
 
-@app.route("/jobs", methods=["GET"])
-def get_jobs():
-    role = request.args.get("role", "software engineer")
-    location = request.args.get("location", "london")
-    results = int(request.args.get("results", 10))
-
-    country_code = get_country_code(location)
-
-    params = {
-        "app_id": ADZUNA_APP_ID,
-        "app_key": ADZUNA_APP_KEY,
-        "results_per_page": results,
-        "what": role,
-        "where": location,
-        "content-type": "application/json"
+def clean_job(job: dict) -> dict:
+    return {
+        "title": job.get("title", ""),
+        "company": job.get("company", {}).get("display_name", ""),
+        "location": job.get("location", {}).get("display_name", ""),
+        "salary_min": job.get("salary_min"),
+        "salary_max": job.get("salary_max"),
+        "salary_is_predicted": job.get("salary_is_predicted"),
+        "contract_type": job.get("contract_type"),
+        "contract_time": job.get("contract_time"),
+        "category": job.get("category", {}).get("label", ""),
+        "description": (job.get("description") or "")[:1200],
+        "url": job.get("redirect_url", ""),
+        "created": job.get("created", ""),
+        "source": "Adzuna"
     }
 
-    try:
-        response = requests.get(
-            f"{ADZUNA_BASE_URL}/{country_code}/search/1",
-            params=params
-        )
-        response.raise_for_status()
-        jobs_data = response.json()
 
-        jobs = []
-        for job in jobs_data.get("results", []):
-            jobs.append({
-                "title": job.get("title", ""),
-                "company": job.get("company", {}).get("display_name", ""),
-                "location": job.get("location", {}).get("display_name", ""),
-                "salary_min": job.get("salary_min"),
-                "salary_max": job.get("salary_max"),
-                "salary_is_predicted": job.get("salary_is_predicted"),
-                "contract_type": job.get("contract_type"),
-                "contract_time": job.get("contract_time"),
-                "description": job.get("description", "")[:500],
-                "url": job.get("redirect_url", ""),
-            })
+def unique_key(job: dict) -> str:
+    return "|".join([
+        str(job.get("title", "")).lower().strip(),
+        str(job.get("company", "")).lower().strip(),
+        str(job.get("location", "")).lower().strip(),
+        str(job.get("url", "")).lower().strip()
+    ])
 
-        return format_jobs_as_text(jobs, role, location), 200, {"Content-Type": "text/plain"}
-
-    except requests.exceptions.RequestException as e:
-        return f"Error fetching jobs: {str(e)}", 500
 
 @app.route("/search_jobs", methods=["POST"])
 def search_jobs():
-    data = request.json
+    data = request.json or {}
+
     role = data.get("role", "")
     location = data.get("location", "london")
-    results_per_page = data.get("results_per_page", 10)
+
+    results_per_page = int(data.get("results_per_page", 50))
+    max_pages = int(data.get("max_pages", 5))
+
+    # Free-tier safe limits
+    results_per_page = max(1, min(results_per_page, 50))
+    max_pages = max(1, min(max_pages, 5))
+
     country_code = get_country_code(location)
 
-    params = {
-        "app_id": ADZUNA_APP_ID,
-        "app_key": ADZUNA_APP_KEY,
-        "results_per_page": results_per_page,
-        "what": role,
-        "where": location,
-        "content-type": "application/json"
-    }
+    jobs = []
+    seen = set()
+    pages_fetched = 0
 
     try:
-        response = requests.get(
-            f"{ADZUNA_BASE_URL}/{country_code}/search/1",
-            params=params
-        )
-        response.raise_for_status()
-        jobs_data = response.json()
+        for page in range(1, max_pages + 1):
+            params = {
+                "app_id": ADZUNA_APP_ID,
+                "app_key": ADZUNA_APP_KEY,
+                "results_per_page": results_per_page,
+                "what": role,
+                "where": location,
+                "content-type": "application/json"
+            }
 
-        jobs = []
-        for job in jobs_data.get("results", []):
-            jobs.append({
-                "title": job.get("title", ""),
-                "company": job.get("company", {}).get("display_name", ""),
-                "location": job.get("location", {}).get("display_name", ""),
-                "salary_min": job.get("salary_min"),
-                "salary_max": job.get("salary_max"),
-                "salary_is_predicted": job.get("salary_is_predicted"),
-                "contract_type": job.get("contract_type"),
-                "contract_time": job.get("contract_time"),
-                "description": job.get("description", "")[:500],
-                "url": job.get("redirect_url", ""),
-                "created": job.get("created", "")
-            })
+            response = requests.get(
+                f"{ADZUNA_BASE_URL}/{country_code}/search/{page}",
+                params=params,
+                timeout=15
+            )
 
-        return jsonify({"count": len(jobs), "jobs": jobs})
+            response.raise_for_status()
+            data = response.json()
+            results = data.get("results", [])
+
+            pages_fetched += 1
+
+            if not results:
+                break
+
+            for raw_job in results:
+                job = clean_job(raw_job)
+                key = unique_key(job)
+
+                if key in seen:
+                    continue
+
+                seen.add(key)
+                jobs.append(job)
+
+        return jsonify({
+            "count": len(jobs),
+            "role_used": role,
+            "location_used": location,
+            "country_code": country_code,
+            "results_per_page": results_per_page,
+            "pages_fetched": pages_fetched,
+            "jobs": jobs
+        })
 
     except requests.exceptions.RequestException as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "error": "Adzuna request failed",
+            "details": str(e)
+        }), 500
+
+    except Exception as e:
+        return jsonify({
+            "error": "Unexpected server error",
+            "details": str(e)
+        }), 500
+
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok"})
+    return jsonify({
+        "status": "ok",
+        "adzuna_app_id_configured": bool(ADZUNA_APP_ID),
+        "adzuna_app_key_configured": bool(ADZUNA_APP_KEY)
+    })
+
 
 if __name__ == "__main__":
     app.run(debug=True)
