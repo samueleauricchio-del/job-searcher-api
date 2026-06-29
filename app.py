@@ -70,7 +70,20 @@ def unique_key(job: dict) -> str:
         str(job.get("url", "")).lower().strip()
     ])
 
+@app.route("/jobs", methods=["GET"])
+def jobs_get():
+    role = request.args.get("role", "financial analyst")
+    location = request.args.get("location", "london")
+    results_per_page = int(request.args.get("results_per_page", 50))
+    max_pages = int(request.args.get("max_pages", 5))
 
+    with app.test_request_context(json={
+        "role": role,
+        "location": location,
+        "results_per_page": results_per_page,
+        "max_pages": max_pages
+    }):
+        return search_jobs()
 @app.route("/search_jobs", methods=["POST"])
 def search_jobs():
     data = request.json or {}
