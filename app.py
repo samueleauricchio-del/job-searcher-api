@@ -36,22 +36,14 @@ def get_country_code(location: str) -> str:
     mapping = {
         "uk": "gb", "united kingdom": "gb", "england": "gb",
         "london": "gb", "manchester": "gb", "birmingham": "gb",
-
         "us": "us", "usa": "us", "united states": "us",
         "new york": "us", "san francisco": "us",
-
         "italy": "it", "italia": "it", "milan": "it", "milano": "it", "rome": "it",
-
         "germany": "de", "deutschland": "de", "berlin": "de", "munich": "de",
-
         "france": "fr", "paris": "fr",
-
         "spain": "es", "madrid": "es", "barcelona": "es",
-
         "netherlands": "nl", "amsterdam": "nl",
-
         "australia": "au", "sydney": "au", "melbourne": "au",
-
         "canada": "ca", "toronto": "ca",
     }
 
@@ -213,12 +205,43 @@ def jobs_get():
         return search_jobs()
 
 
+@app.route("/email-inbound", methods=["POST"])
+def email_inbound():
+    data = request.json or {}
+
+    sender = data.get("from", "")
+    subject = data.get("subject", "")
+    body = data.get("body", "")
+
+    reply = f"""Buongiorno,
+
+abbiamo ricevuto la tua email.
+
+Oggetto: {subject}
+Mittente: {sender}
+
+Questa è una risposta di test generata automaticamente dall'Email Manager.
+
+Corpo email ricevuto:
+{body[:1000]}
+
+Cordiali saluti,
+Email Manager
+"""
+
+    return jsonify({
+        "status": "ok",
+        "reply": reply
+    })
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({
         "status": "ok",
         "adzuna_app_id_configured": bool(ADZUNA_APP_ID),
-        "adzuna_app_key_configured": bool(ADZUNA_APP_KEY)
+        "adzuna_app_key_configured": bool(ADZUNA_APP_KEY),
+        "email_manager": "active"
     })
 
 
@@ -226,8 +249,13 @@ def health():
 def home():
     return jsonify({
         "status": "ok",
-        "message": "Job Searcher API is running",
-        "endpoints": ["/health", "/jobs", "/search_jobs"]
+        "message": "Job Searcher API + Email Manager is running",
+        "endpoints": [
+            "/health",
+            "/jobs",
+            "/search_jobs",
+            "/email-inbound"
+        ]
     })
 
 
