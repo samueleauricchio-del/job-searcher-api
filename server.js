@@ -29,6 +29,10 @@ const CATEGORY_ALIASES = {
   orecchini: "earrings",
   earcuff: "earrings",
   earcuffs: "earrings",
+  "ear cuff": "earrings",
+  "ear cuffs": "earrings",
+  cuff: "earrings",
+  cuffs: "earrings",
   hoop: "earrings",
   hoops: "earrings",
 
@@ -79,26 +83,55 @@ function normalizeCategory(value = "") {
 }
 
 function inferCategory(product) {
-  const title = normalizeText(product.title);
-  const handle = normalizeText(product.handle);
-  const type = normalizeText(product.product_type);
-  const tags = (product.tags || []).map(normalizeText).join(" ");
+  const blob = normalizeText(`
+    ${product.title || ""}
+    ${product.handle || ""}
+    ${product.product_type || ""}
+    ${(product.tags || []).join(" ")}
+    ${stripHtml(product.body_html || "")}
+  `);
 
-  const blob = `${title} ${handle} ${type} ${tags}`;
-
-  if (/(earring|earrings|orecchin|earcuff|earcuffs|hoop|hoops)/.test(blob)) {
+  if (
+    blob.includes("earring") ||
+    blob.includes("orecchin") ||
+    blob.includes("ear cuff") ||
+    blob.includes("ear cuffs") ||
+    blob.includes("earcuff") ||
+    blob.includes("earcuffs") ||
+    blob.includes("cuff") ||
+    blob.includes("cuffs") ||
+    blob.includes("hoop") ||
+    blob.includes("hoops")
+  ) {
     return "earrings";
   }
 
-  if (/(necklace|necklaces|collan|choker|chocker)/.test(blob)) {
+  if (
+    blob.includes("necklace") ||
+    blob.includes("collana") ||
+    blob.includes("collane") ||
+    blob.includes("collan") ||
+    blob.includes("choker") ||
+    blob.includes("chocker")
+  ) {
     return "necklaces";
   }
 
-  if (/(bracelet|bracelets|braccial)/.test(blob)) {
+  if (
+    blob.includes("bracelet") ||
+    blob.includes("bracciale") ||
+    blob.includes("bracciali") ||
+    blob.includes("braccial")
+  ) {
     return "bracelets";
   }
 
-  if (/(ring|rings|anell)/.test(blob)) {
+  if (
+    blob.includes("ring") ||
+    blob.includes("anello") ||
+    blob.includes("anelli") ||
+    blob.includes("anell")
+  ) {
     return "rings";
   }
 
@@ -143,7 +176,7 @@ function normalizeProduct(product) {
     description,
     images: (product.images || []).map(img => img.src).filter(Boolean),
     published_at: product.published_at,
-    updated_at: product.updated_at
+        updated_at: product.updated_at
   };
 }
 
@@ -320,7 +353,6 @@ function formatPrice(product) {
 
   return `€${product.price_min}`;
 }
-
 function productMarkdown(product) {
   const variants = product.variants
     .map(v => {
@@ -471,7 +503,6 @@ app.get("/", (req, res) => {
     ]
   });
 });
-
 app.get("/health", async (req, res) => {
   try {
     const products = await loadProducts();
