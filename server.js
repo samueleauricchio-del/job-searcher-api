@@ -630,18 +630,46 @@ app.get("/product/:handle", async (req, res) => {
   }
 });
 
-app.get("/rag", async (req, res) => {
+app.get("/rag/:category", async (req, res) => {
   try {
     const products = await loadProducts(req.query.refresh === "true");
-    const document = buildRagDocument(products);
 
-    res.setHeader("Content-Type", "text/markdown; charset=utf-8");
-    res.send(document);
+    const categoryMap = {
+      earrings: "Orecchini",
+      rings: "Anelli",
+      necklaces: "Collane",
+      bracelets: "Bracciali"
+    };
+
+    const requested = req.params.category;
+    const label = categoryMap[requested];
+
+    if (!label) {
+      return res.status(404).send("Categoria non trovata");
+    }
+
+    const list = sortProducts(
+      products.filter(p => p.category === requested),
+      "price_asc"
+    );
+
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+
+    let md = `CATALOGO MAY MOMA - ${label.toUpperCase()}\n`;
+    md += `TOTALE PRODOTTI ${label.toUpperCase()}: ${list.length}\n\n`;
+    md += `LISTA COMPLETA ${label.toUpperCase()} CON PREZZI:\n\n`;
+
+    list.forEach((p, index) => {
+      md += `${index + 1}. ${p.title} | ${formatPrice(p)} | ${p.available ? "disponibile" : "non disponibile"} | ${p.url}\n`;
+    });
+
+    md += `\nFINE LISTA COMPLETA ${label.toUpperCase()}. TOTALE: ${list.length} PRODOTTI.\n`;
+
+    res.send(md);
   } catch (error) {
-    res.status(500).send(`Errore generazione RAG: ${error.message}`);
+    res.status(500).send(`Errore generazione RAG categoria: ${error.message}`);
   }
 });
-
 app.post("/catalog", async (req, res) => {
   try {
     const products = await loadProducts(Boolean(req.body.refresh));
