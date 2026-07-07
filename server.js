@@ -82,56 +82,85 @@ function normalizeCategory(value = "") {
   return null;
 }
 
-function inferCategory(product) {
-  const type = normalizeText(product.product_type || "");
-  const tags = (product.tags || []).map(normalizeText);
-  const title = normalizeText(product.title || "");
-  const handle = normalizeText(product.handle || "");
+
+
+  function inferCategory(product) {
+  const titleHandle = normalizeText(`
+    ${product.title || ""}
+    ${product.handle || ""}
+  `);
+
+  const metadata = normalizeText(`
+    ${product.product_type || ""}
+    ${(product.tags || []).join(" ")}
+  `);
+
   const description = normalizeText(stripHtml(product.body_html || ""));
 
-  const fields = [type, ...tags, title, handle, description].join(" ");
+  const primary = `${titleHandle} ${metadata}`;
 
   if (
-    fields.includes("earrings") ||
-    fields.includes("earring") ||
-    fields.includes("earcuff") ||
-    fields.includes("ear cuff") ||
-    fields.includes("orecchin") ||
-    fields.includes("hoop")
-  ) {
-    return "earrings";
-  }
+    primary.includes("earring") ||
+    primary.includes("earrings") ||
+    primary.includes("orecchin") ||
+    primary.includes("ear cuff") ||
+    primary.includes("earcuff") ||
+    primary.includes("hoop")
+  ) return "earrings";
 
   if (
-    fields.includes("rings") ||
-    fields.includes("ring") ||
-    fields.includes("anello") ||
-    fields.includes("anelli") ||
-    fields.includes("anell")
-  ) {
-    return "rings";
-  }
+    primary.includes("ring") ||
+    primary.includes("rings") ||
+    primary.includes("anello") ||
+    primary.includes("anelli") ||
+    primary.includes("anell")
+  ) return "rings";
 
   if (
-    fields.includes("necklaces") ||
-    fields.includes("necklace") ||
-    fields.includes("collana") ||
-    fields.includes("collane") ||
-    fields.includes("collan") ||
-    fields.includes("choker")
-  ) {
-    return "necklaces";
-  }
+    primary.includes("necklace") ||
+    primary.includes("necklaces") ||
+    primary.includes("collana") ||
+    primary.includes("collane") ||
+    primary.includes("collan") ||
+    primary.includes("choker")
+  ) return "necklaces";
 
   if (
-    fields.includes("bracelets") ||
-    fields.includes("bracelet") ||
-    fields.includes("bracciale") ||
-    fields.includes("bracciali") ||
-    fields.includes("braccial")
-  ) {
-    return "bracelets";
-  }
+    primary.includes("bracelet") ||
+    primary.includes("bracelets") ||
+    primary.includes("bracciale") ||
+    primary.includes("bracciali") ||
+    primary.includes("braccial") ||
+    primary.includes("cavigliera")
+  ) return "bracelets";
+
+  if (
+    description.includes("earring") ||
+    description.includes("orecchin") ||
+    description.includes("earcuff") ||
+    description.includes("hoop")
+  ) return "earrings";
+
+  if (
+    description.includes("ring") ||
+    description.includes("rings") ||
+    description.includes("anello") ||
+    description.includes("anelli")
+  ) return "rings";
+
+  if (
+    description.includes("necklace") ||
+    description.includes("collana") ||
+    description.includes("collane") ||
+    description.includes("choker")
+  ) return "necklaces";
+
+  if (
+    description.includes("bracelet") ||
+    description.includes("bracciale") ||
+    description.includes("bracciali") ||
+    description.includes("cavigliera")
+  ) return "bracelets";
 
   return "other";
 }
