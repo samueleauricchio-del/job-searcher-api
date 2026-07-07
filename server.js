@@ -681,45 +681,33 @@ app.get("/rag/:category", async (req, res) => {
 
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
 
-    let md = `CATALOGO MAY MOMA - ${label.toUpperCase()}\n`;
-    md += `TOTALE PRODOTTI ${label.toUpperCase()}: ${list.length}\n\n`;
+    let md = `# ${label}\n\n`;
+    md += `Totale prodotti: ${list.length}\n\n`;
 
     list.forEach((p, index) => {
-      md += `PRODOTTO ${index + 1}\n`;
-      md += `Nome: ${p.title}\n`;
+      md += `## ${index + 1}. ${p.title}\n`;
       md += `Prezzo: ${formatPrice(p)}\n`;
-      md += `Categoria: ${p.category}\n`;
-      md += `Disponibilità: ${p.available ? "disponibile" : "non disponibile"}\n`;
+      md += `Disponibilità: ${p.available ? "Disponibile" : "Non disponibile"}\n`;
       md += `URL: ${p.url}\n`;
-      md += `Tipo prodotto: ${p.product_type || "non specificato"}\n`;
+      md += `Tipo: ${p.product_type || "non specificato"}\n`;
       md += `Tag: ${p.tags.length ? p.tags.join(", ") : "nessun tag"}\n`;
       md += `Descrizione: ${p.description || "descrizione non disponibile"}\n`;
 
       md += `Varianti:\n`;
       if (p.variants.length) {
         p.variants.forEach(v => {
-          md += `- ${v.title || "Default"} | ${Number.isFinite(v.price) ? "€" + v.price : "prezzo non disponibile"} | ${v.available ? "disponibile" : "non disponibile"}\n`;
+          md += `- ${v.title || "Default"} | ${Number.isFinite(v.price) ? "€" + v.price : "N/D"} | ${v.available ? "Disponibile" : "Non disponibile"}\n`;
         });
       } else {
         md += `- Nessuna variante disponibile\n`;
       }
 
-      md += `\n---\n\n`;
+      md += `\n-----------------------------\n\n`;
     });
 
-    md += `FINE CATALOGO ${label.toUpperCase()}. TOTALE: ${list.length} PRODOTTI.\n`;
-
     res.send(md);
   } catch (error) {
-    res.status(500).send(`Errore generazione RAG categoria: ${error.message}`);
-  }
-});
-
-    md += `\nFINE LISTA COMPLETA ${label.toUpperCase()}. TOTALE: ${list.length} PRODOTTI.\n`;
-
-    res.send(md);
-  } catch (error) {
-    res.status(500).send(`Errore generazione RAG categoria: ${error.message}`);
+    res.status(500).send(error.message);
   }
 });
 app.post("/catalog", async (req, res) => {
