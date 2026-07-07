@@ -8,7 +8,7 @@ app.use(express.json({ limit: "1mb" }));
 const PORT = process.env.PORT || 3000;
 const SHOPIFY_PRODUCTS_URL =
   process.env.SHOPIFY_PRODUCTS_URL ||
-  "https://maymoma.com/it/products.json?limit=250";
+  "https://maymoma.com/products.json?limit=250&currency=EUR";
 
 const CACHE_TTL_MS = Number(process.env.CACHE_TTL_MS || 5 * 60 * 1000);
 
