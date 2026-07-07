@@ -83,61 +83,58 @@ function normalizeCategory(value = "") {
 }
 
 function inferCategory(product) {
-  const blob = normalizeText(`
-    ${product.title || ""}
-    ${product.handle || ""}
-    ${product.product_type || ""}
-    ${(product.tags || []).join(" ")}
-    ${stripHtml(product.body_html || "")}
-  `);
+  const type = normalizeText(product.product_type || "");
+  const tags = (product.tags || []).map(normalizeText);
+  const title = normalizeText(product.title || "");
+  const handle = normalizeText(product.handle || "");
+  const description = normalizeText(stripHtml(product.body_html || ""));
+
+  const fields = [type, ...tags, title, handle, description].join(" ");
 
   if (
-    blob.includes("earring") ||
-    blob.includes("orecchin") ||
-    blob.includes("ear cuff") ||
-    blob.includes("ear cuffs") ||
-    blob.includes("earcuff") ||
-    blob.includes("earcuffs") ||
-    blob.includes("cuff") ||
-    blob.includes("cuffs") ||
-    blob.includes("hoop") ||
-    blob.includes("hoops")
+    fields.includes("earrings") ||
+    fields.includes("earring") ||
+    fields.includes("earcuff") ||
+    fields.includes("ear cuff") ||
+    fields.includes("orecchin") ||
+    fields.includes("hoop")
   ) {
     return "earrings";
   }
 
   if (
-    blob.includes("necklace") ||
-    blob.includes("collana") ||
-    blob.includes("collane") ||
-    blob.includes("collan") ||
-    blob.includes("choker") ||
-    blob.includes("chocker")
+    fields.includes("rings") ||
+    fields.includes("ring") ||
+    fields.includes("anello") ||
+    fields.includes("anelli") ||
+    fields.includes("anell")
+  ) {
+    return "rings";
+  }
+
+  if (
+    fields.includes("necklaces") ||
+    fields.includes("necklace") ||
+    fields.includes("collana") ||
+    fields.includes("collane") ||
+    fields.includes("collan") ||
+    fields.includes("choker")
   ) {
     return "necklaces";
   }
 
   if (
-    blob.includes("bracelet") ||
-    blob.includes("bracciale") ||
-    blob.includes("bracciali") ||
-    blob.includes("braccial")
+    fields.includes("bracelets") ||
+    fields.includes("bracelet") ||
+    fields.includes("bracciale") ||
+    fields.includes("bracciali") ||
+    fields.includes("braccial")
   ) {
     return "bracelets";
   }
 
-  if (
-    blob.includes("ring") ||
-    blob.includes("anello") ||
-    blob.includes("anelli") ||
-    blob.includes("anell")
-  ) {
-    return "rings";
-  }
-
   return "other";
 }
-
 function normalizeProduct(product) {
   const variants = (product.variants || []).map(v => ({
     id: v.id,
