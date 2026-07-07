@@ -548,7 +548,7 @@ app.get("/health", async (req, res) => {
 
 app.get("/summary", async (req, res) => {
   try {
-    const products = await loadProducts(req.query.refresh === "true");
+    const products = await loadProducts(true);
     res.json(summary(products));
   } catch (error) {
     res.status(500).json({
