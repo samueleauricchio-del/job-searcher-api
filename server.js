@@ -658,7 +658,7 @@ app.get("/product/:handle", async (req, res) => {
 
 app.get("/rag/:category", async (req, res) => {
   try {
-    const products = await loadProducts(req.query.refresh === "true");
+    const products = await loadProducts(true);
 
     const categoryMap = {
       earrings: "Orecchini",
@@ -683,11 +683,37 @@ app.get("/rag/:category", async (req, res) => {
 
     let md = `CATALOGO MAY MOMA - ${label.toUpperCase()}\n`;
     md += `TOTALE PRODOTTI ${label.toUpperCase()}: ${list.length}\n\n`;
-    md += `LISTA COMPLETA ${label.toUpperCase()} CON PREZZI:\n\n`;
 
     list.forEach((p, index) => {
-      md += `${index + 1}. ${p.title} | ${formatPrice(p)} | ${p.available ? "disponibile" : "non disponibile"} | ${p.url}\n`;
+      md += `PRODOTTO ${index + 1}\n`;
+      md += `Nome: ${p.title}\n`;
+      md += `Prezzo: ${formatPrice(p)}\n`;
+      md += `Categoria: ${p.category}\n`;
+      md += `Disponibilità: ${p.available ? "disponibile" : "non disponibile"}\n`;
+      md += `URL: ${p.url}\n`;
+      md += `Tipo prodotto: ${p.product_type || "non specificato"}\n`;
+      md += `Tag: ${p.tags.length ? p.tags.join(", ") : "nessun tag"}\n`;
+      md += `Descrizione: ${p.description || "descrizione non disponibile"}\n`;
+
+      md += `Varianti:\n`;
+      if (p.variants.length) {
+        p.variants.forEach(v => {
+          md += `- ${v.title || "Default"} | ${Number.isFinite(v.price) ? "€" + v.price : "prezzo non disponibile"} | ${v.available ? "disponibile" : "non disponibile"}\n`;
+        });
+      } else {
+        md += `- Nessuna variante disponibile\n`;
+      }
+
+      md += `\n---\n\n`;
     });
+
+    md += `FINE CATALOGO ${label.toUpperCase()}. TOTALE: ${list.length} PRODOTTI.\n`;
+
+    res.send(md);
+  } catch (error) {
+    res.status(500).send(`Errore generazione RAG categoria: ${error.message}`);
+  }
+});
 
     md += `\nFINE LISTA COMPLETA ${label.toUpperCase()}. TOTALE: ${list.length} PRODOTTI.\n`;
 
